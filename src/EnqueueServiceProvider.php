@@ -67,7 +67,7 @@ class EnqueueServiceProvider extends ServiceProvider
         });
 
         $manager->addConnector('amqp_interop', function () {
-            return new AmqpConnector();
+            return new Connector();
         });
     }
 }
