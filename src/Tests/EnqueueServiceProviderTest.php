@@ -28,9 +28,9 @@ class EnqueueServiceProviderTest extends TestCase
     {
         $queueManagerMock = $this->createMock(QueueManager::class);
         $queueManagerMock
-            ->expects($this->once())
+            ->expects($this->exactly(2))
             ->method('addConnector')
-            ->with('enqueue', $this->isInstanceOf(\Closure::class))
+            ->with($this->matchesRegularExpression('/interop|amqp_interop/'), $this->isInstanceOf(\Closure::class))
             ->willReturnCallback(function ($name, \Closure $closure) {
                 $this->assertInstanceOf(Connector::class, call_user_func($closure));
             });
