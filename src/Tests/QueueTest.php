@@ -101,7 +101,7 @@ class QueueTest extends TestCase
             ->willReturnCallback(function (InteropQueue $queue, InteropMessage $message) {
                 $this->assertSame('theCustomQueueName', $queue->getQueueName());
 
-                $this->assertContains('"displayName":"Enqueue\\\LaravelQueue\\\Tests\\\TestJob"', $message->getBody());
+                $this->assertContains('"commandName":"Enqueue\\\LaravelQueue\\\Tests\\\TestJob"', $message->getBody());
                 $this->assertSame([], $message->getProperties());
                 $this->assertSame([], $message->getHeaders());
             })
