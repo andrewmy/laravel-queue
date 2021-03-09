@@ -37,6 +37,7 @@ class Worker extends \Illuminate\Queue\Worker implements
     protected $stopped = false;
 
     protected $job;
+    private $shouldQuit = false;
 
     public function daemon($connectionName, $queueNames, WorkerOptions $options)
     {
@@ -57,7 +58,7 @@ class Worker extends \Illuminate\Queue\Worker implements
         $queueConsumer = new QueueConsumer($context, new ChainExtension([$this]));
         foreach (explode(',', $queueNames) as $queueName) {
             $queueConsumer->bindCallback($queueName, function() {
-                $this->runJob($this->job, $this->connectionName, $this->options);
+                $this->process($this->connectionName, $this->job, $this->options);
 
                 return Result::ALREADY_ACKNOWLEDGED;
             });
@@ -90,7 +91,7 @@ class Worker extends \Illuminate\Queue\Worker implements
 
         foreach (explode(',', $queueNames) as $queueName) {
             $queueConsumer->bindCallback($queueName, function() {
-                $this->runJob($this->job, $this->connectionName, $this->options);
+                $this->process($this->connectionName, $this->job, $this->options);
 
                 return Result::ALREADY_ACKNOWLEDGED;
             });
@@ -114,7 +115,7 @@ class Worker extends \Illuminate\Queue\Worker implements
 
     public function onPreConsume(PreConsume $context): void
     {
-        if (! $this->daemonShouldRun($this->options, $this->connectionName, $this->queueNames)) {
+        if (! $this->daemonShouldRun()) {
             $this->pauseWorker($this->options, $this->lastRestart);
         }
 
@@ -131,7 +132,7 @@ class Worker extends \Illuminate\Queue\Worker implements
         );
 
         if ($this->supportsAsyncSignals()) {
-            $this->registerTimeoutHandler($this->job, $this->options);
+            $this->registerTimeoutHandler($this->options);
         }
     }
 
@@ -152,7 +153,71 @@ class Worker extends \Illuminate\Queue\Worker implements
             return;
         }
 
-        parent::stop($status);
+        parent::stop();
+    }
+
+    /**
+     * Stop the process if necessary.
+     *
+     * @param  \Illuminate\Queue\WorkerOptions  $options
+     * @param  int  $lastRestart
+     * @param  mixed  $job
+     */
+    protected function stopIfNecessary(WorkerOptions $options, $lastRestart, $job = null)
+    {
+        if ($this->shouldQuit) {
+            $this->stop();
+        } elseif ($this->memoryExceeded($options->memory)) {
+            $this->stop(12);
+        } elseif ($this->queueShouldRestart($lastRestart)) {
+            $this->stop();
+        }
+    }
+
+    /**
+     * Enable async signals for the process.
+     *
+     * @return void
+     */
+    protected function listenForSignals()
+    {
+        pcntl_async_signals(true);
+
+        pcntl_signal(SIGTERM, function () {
+            $this->shouldQuit = true;
+        });
+
+        pcntl_signal(SIGUSR2, function () {
+            $this->paused = true;
+        });
+
+        pcntl_signal(SIGCONT, function () {
+            $this->paused = false;
+        });
+    }
+
+    /**
+     * Determine if "async" signals are supported.
+     *
+     * @return bool
+     */
+    protected function supportsAsyncSignals()
+    {
+        return extension_loaded('pcntl');
+    }
+
+    /**
+     * Pause the worker for the current loop.
+     *
+     * @param  \Illuminate\Queue\WorkerOptions  $options
+     * @param  int  $lastRestart
+     * @return void
+     */
+    protected function pauseWorker(WorkerOptions $options, $lastRestart)
+    {
+        $this->sleep($options->sleep > 0 ? $options->sleep : 1);
+
+        $this->stopIfNecessary($options, $lastRestart);
     }
 }
 
