@@ -115,7 +115,7 @@ class Worker extends \Illuminate\Queue\Worker implements
 
     public function onPreConsume(PreConsume $context): void
     {
-        if (! $this->daemonShouldRun()) {
+        if (! $this->daemonShouldRun($this->options)) {
             $this->pauseWorker($this->options, $this->lastRestart);
         }
 
